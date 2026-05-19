@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reports - Admin - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" style="background:var(--secondary)">
+        <a href="/admin/dashboard.html" class="navbar-brand">
+            <div><h1>AFIT VAS Admin</h1><small>Air Force Institute of Technology</small></div>
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="/admin/dashboard.html">Dashboard</a></li>
+            <li><a href="/admin/applications.html">Applications</a></li>
+            <li><a href="/admin/reports.html" class="active">Reports</a></li>
+            <li><span class="nav-user" id="nav-user-name"></span></li>
+            <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-between items-center mb-2">
+            <h2>Reports & Analytics</h2>
+            <button class="btn btn-primary" onclick="exportCsv()">Download CSV Export</button>
+        </div>
+
+        <div class="card mb-2">
+            <div class="card-body">
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label>From Date</label>
+                        <input type="date" id="from-date" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>To Date</label>
+                        <input type="date" id="to-date" class="form-control">
+                    </div>
+                    <div class="form-group" style="flex:0">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary btn-sm" onclick="loadReport()">Generate Report</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="report-content">
+            <div class="text-center"><div class="spinner"></div></div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!Auth.requireLogin('admin')) throw '';
+        setNavUser(`${Auth.getUser().first_name} ${Auth.getUser().last_name}`);
+
+        // Default date range: last 90 days
+        const today = new Date();
+        const ago90 = new Date(today);
+        ago90.setDate(ago90.getDate() - 90);
+        document.getElementById('from-date').value = ago90.toISOString().slice(0,10);
+        document.getElementById('to-date').value = today.toISOString().slice(0,10);
+
+        async function loadReport() {
+            const from = document.getElementById('from-date').value;
+            const to = document.getElementById('to-date').value;
+
+            const res = await Api.get(`/admin/reports?from_date=${from}&to_date=${to}`);
+            if (!res?.data) {
+                document.getElementById('report-content').innerHTML = '<div class="alert alert-danger">Failed to load report.</div>';
+                return;
+            }
+
+            const { summary, programmes, daily } = res.data;
+
+            let html = `
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value">${summary.total || 0}</div><div class="stat-label">Total Applications</div></div>
+                    <div class="stat-card info"><div class="stat-value">${summary.eligible || 0}</div><div class="stat-label">Eligible</div></div>
+                    <div class="stat-card warning"><div class="stat-value">${summary.not_eligible || 0}</div><div class="stat-label">Not Eligible</div></div>
+                    <div class="stat-card success"><div class="stat-value">${summary.admitted || 0}</div><div class="stat-label">Admitted</div></div>
+                    <div class="stat-card danger"><div class="stat-value">${summary.rejected || 0}</div><div class="stat-label">Rejected</div></div>
+                    <div class="stat-card"><div class="stat-value">${summary.under_review || 0}</div><div class="stat-label">Under Review</div></div>
+                </div>
+
+                <div class="two-col">
+                    <div class="card">
+                        <div class="card-header">Applications by Programme</div>
+                        <div class="card-body">`;
+
+            const maxProg = Math.max(...programmes.map(p => parseInt(p.total) || 1), 1);
+            html += `<div class="bar-chart">
+                ${programmes.map(p => `
+                    <div class="bar-row">
+                        <span class="bar-label">${p.code}</span>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width:${Math.max(((p.total/maxProg)*100),5)}%">${p.total}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>`;
+
+            html += `</div></div>
+                    <div class="card">
+                        <div class="card-header">Admission Rate by Programme</div>
+                        <div class="card-body">
+                            <div class="bar-chart">
+                                ${programmes.map(p => {
+                                    const total = parseInt(p.total) || 0;
+                                    const admitted = parseInt(p.admitted) || 0;
+                                    const rate = total ? Math.round((admitted/total)*100) : 0;
+                                    return `<div class="bar-row">
+                                        <span class="bar-label">${p.code}</span>
+                                        <div class="bar-track">
+                                            <div class="bar-fill" style="width:${Math.max(rate,5)}%;background:var(--success)">${rate}%</div>
+                                        </div>
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // Daily submissions sparkline
+            if (daily?.length) {
+                const maxDaily = Math.max(...daily.map(d => d.count));
+                html += `
+                    <div class="card mt-2">
+                        <div class="card-header">Daily Submissions</div>
+                        <div class="card-body">
+                            <div style="display:flex;align-items:flex-end;gap:2px;height:100px;overflow-x:auto">
+                                ${daily.map(d => `
+                                    <div style="flex:1;min-width:8px;background:var(--primary);border-radius:2px 2px 0 0;height:${Math.max((d.count/maxDaily)*100,4)}%"
+                                         title="${d.date}: ${d.count}"></div>
+                                `).join('')}
+                            </div>
+                            <div class="d-flex justify-between text-sm text-muted mt-1">
+                                <span>${daily[0]?.date}</span>
+                                <span>${daily[daily.length-1]?.date}</span>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            // Programme detail table
+            html += `
+                <div class="card mt-2">
+                    <div class="card-header">Programme Breakdown</div>
+                    <div class="card-body">
+                        <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr><th>Programme</th><th>Total</th><th>Eligible</th><th>Admitted</th><th>Rejected</th><th>Rate</th></tr>
+                            </thead>
+                            <tbody>
+                                ${programmes.map(p => {
+                                    const total = parseInt(p.total) || 0;
+                                    const rate = total ? Math.round((parseInt(p.admitted||0)/total)*100) : 0;
+                                    return `<tr>
+                                        <td>${p.name} (${p.code})</td>
+                                        <td>${p.total}</td>
+                                        <td>${p.eligible || 0}</td>
+                                        <td>${p.admitted || 0}</td>
+                                        <td>${p.rejected || 0}</td>
+                                        <td>${rate}%</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+                </div>`;
+
+            document.getElementById('report-content').innerHTML = html;
+        }
+
+        async function exportCsv() {
+            await Api.get('/admin/export');
+        }
+
+        loadReport();
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault(); Auth.clear(); window.location.href = '/admin/login.html';
+        });
+    </script>
+</body>
+</html>

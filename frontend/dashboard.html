@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/dashboard.html" class="navbar-brand">
+            <div>
+                <h1>AFIT VAS</h1>
+                <small>Air Force Institute of Technology</small>
+            </div>
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="/dashboard.html" class="active">Dashboard</a></li>
+            <li><a href="/application.html">Apply</a></li>
+            <li><a href="/documents.html">Documents</a></li>
+            <li><a href="/status.html">Status</a></li>
+            <li>
+                <a href="#" id="notif-link">
+                    Notifications <span class="notif-badge hidden" id="notif-count">0</span>
+                </a>
+            </li>
+            <li><span class="nav-user" id="nav-user-name"></span></li>
+            <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h2 class="mb-2">Welcome, <span id="welcome-name"></span>!</h2>
+
+        <div class="action-grid">
+            <a href="/application.html" class="action-card">
+                <div class="icon">&#128221;</div>
+                <h3>Apply Now</h3>
+                <p class="text-sm text-muted">Start a new application</p>
+            </a>
+            <a href="/documents.html" class="action-card">
+                <div class="icon">&#128196;</div>
+                <h3>Documents</h3>
+                <p class="text-sm text-muted">Upload required documents</p>
+            </a>
+            <a href="/status.html" class="action-card">
+                <div class="icon">&#128200;</div>
+                <h3>Track Status</h3>
+                <p class="text-sm text-muted">View application progress</p>
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-header">My Applications</div>
+            <div class="card-body">
+                <div id="apps-loading" class="text-center"><div class="spinner"></div></div>
+                <div id="apps-empty" class="text-center text-muted hidden" style="padding:2rem">
+                    You haven't submitted any applications yet. <a href="/application.html">Start an application</a>.
+                </div>
+                <div class="table-container hidden" id="apps-table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Programme</th>
+                                <th>Status</th>
+                                <th>Submitted</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="apps-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-2">
+            <div class="card-header">Recent Notifications</div>
+            <div class="card-body" id="notif-list" style="padding:0">
+                <p class="text-center text-muted" style="padding:1.5rem">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!Auth.requireLogin()) throw '';
+        const user = Auth.getUser();
+        document.getElementById('welcome-name').textContent = user.first_name;
+        setNavUser(`${user.first_name} ${user.last_name}`);
+
+        async function loadDashboard() {
+            const [appsRes, notifRes] = await Promise.all([
+                Api.get('/applications'),
+                Api.get('/notifications?limit=5'),
+            ]);
+
+            // Applications
+            document.getElementById('apps-loading').classList.add('hidden');
+            if (appsRes?.data?.length) {
+                document.getElementById('apps-table-wrap').classList.remove('hidden');
+                const tbody = document.getElementById('apps-tbody');
+                tbody.innerHTML = appsRes.data.map(a => `
+                    <tr>
+                        <td><strong>${a.reference_number}</strong></td>
+                        <td>${a.programme_name} (${a.programme_code})</td>
+                        <td>${statusBadge(a.status)}</td>
+                        <td>${formatDate(a.submitted_at)}</td>
+                        <td><a href="/status.html?id=${a.id}" class="btn btn-sm btn-outline">View</a></td>
+                    </tr>
+                `).join('');
+            } else {
+                document.getElementById('apps-empty').classList.remove('hidden');
+            }
+
+            // Notifications
+            if (notifRes?.data) {
+                const { notifications, unread_count } = notifRes.data;
+                if (unread_count > 0) {
+                    const badge = document.getElementById('notif-count');
+                    badge.textContent = unread_count;
+                    badge.classList.remove('hidden');
+                }
+                const list = document.getElementById('notif-list');
+                if (notifications.length) {
+                    list.innerHTML = notifications.map(n => `
+                        <div class="notif-item ${n.is_read ? '' : 'unread'}">
+                            <strong>${n.title}</strong>
+                            <p class="text-sm text-muted">${n.message}</p>
+                            <small class="text-muted">${formatDate(n.created_at)}</small>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<p class="text-center text-muted" style="padding:1.5rem">No notifications yet.</p>';
+                }
+            }
+        }
+
+        loadDashboard();
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            Auth.clear();
+            window.location.href = '/login.html';
+        });
+    </script>
+</body>
+</html>

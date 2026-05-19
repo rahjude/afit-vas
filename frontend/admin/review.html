@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Review Application - Admin - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" style="background:var(--secondary)">
+        <a href="/admin/dashboard.html" class="navbar-brand">
+            <div><h1>AFIT VAS Admin</h1><small>Air Force Institute of Technology</small></div>
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="/admin/dashboard.html">Dashboard</a></li>
+            <li><a href="/admin/applications.html">Applications</a></li>
+            <li><a href="/admin/reports.html">Reports</a></li>
+            <li><span class="nav-user" id="nav-user-name"></span></li>
+            <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-between items-center mb-2">
+            <h2>Application Review</h2>
+            <a href="/admin/applications.html" class="btn btn-outline">&larr; Back to List</a>
+        </div>
+
+        <div id="alert-box"></div>
+        <div id="app-content"><div class="spinner"></div></div>
+    </div>
+
+    <!-- Status Update Modal -->
+    <div class="modal-overlay" id="status-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Update Application Status</h3>
+                <button class="modal-close" onclick="closeModal('status-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>New Status *</label>
+                    <select id="modal-status" class="form-control">
+                        <option value="">Select</option>
+                        <option value="under_review">Under Review</option>
+                        <option value="admitted">Admitted</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Admin Notes</label>
+                    <textarea id="modal-notes" class="form-control" rows="4" placeholder="Optional notes for the applicant..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('status-modal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveStatus()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Reject Modal -->
+    <div class="modal-overlay" id="doc-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Reject Document</h3>
+                <button class="modal-close" onclick="closeModal('doc-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Rejection Reason *</label>
+                    <textarea id="doc-reason" class="form-control" rows="3" placeholder="Explain why this document is rejected..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('doc-modal')">Cancel</button>
+                <button class="btn btn-danger" onclick="rejectDoc()">Reject Document</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!Auth.requireLogin('admin')) throw '';
+        setNavUser(`${Auth.getUser().first_name} ${Auth.getUser().last_name}`);
+
+        const appId = new URLSearchParams(window.location.search).get('id');
+        if (!appId) { window.location.href = '/admin/applications.html'; }
+
+        let currentApp = null;
+        let selectedDocId = null;
+
+        async function loadApplication() {
+            const res = await Api.get(`/admin/applications/${appId}`);
+            if (!res?.data) {
+                document.getElementById('app-content').innerHTML = '<div class="alert alert-danger">Application not found.</div>';
+                return;
+            }
+
+            currentApp = res.data;
+            const a = currentApp;
+            const creditGrades = ['A1','B2','B3','C4','C5','C6'];
+            const docLabels = {
+                waec_result:'WAEC Result', neco_result:'NECO Result', jamb_slip:'JAMB Slip',
+                birth_certificate:'Birth Certificate', passport_photo:'Passport Photo',
+                lga_certificate:'LGA Certificate', medical_certificate:'Medical Certificate'
+            };
+
+            let html = `
+                <div class="status-banner ${a.status}" style="margin-bottom:1.5rem">
+                    <div>
+                        <h2>${a.reference_number} — ${a.status.replace(/_/g,' ').toUpperCase()}</h2>
+                        <p>${a.programme_name} (${a.programme_code}) — ${a.degree_type}, ${a.department}</p>
+                    </div>
+                    <div style="margin-left:auto">
+                        <button class="btn btn-white btn-sm" onclick="openModal('status-modal')">Update Status</button>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div>
+                        <div class="card mb-2">
+                            <div class="card-header">Personal Information</div>
+                            <div class="card-body">
+                                <table>
+                                    <tr><td><strong>Name</strong></td><td>${a.first_name} ${a.last_name}</td></tr>
+                                    <tr><td><strong>Email</strong></td><td>${a.email}</td></tr>
+                                    <tr><td><strong>Phone</strong></td><td>${a.phone}</td></tr>
+                                    <tr><td><strong>Gender</strong></td><td>${a.gender || '—'}</td></tr>
+                                    <tr><td><strong>State</strong></td><td>${a.state_of_origin || '—'}</td></tr>
+                                    <tr><td><strong>DOB</strong></td><td>${a.date_of_birth || '—'}</td></tr>
+                                    <tr><td><strong>JAMB Reg</strong></td><td>${a.jamb_reg_number || '—'}</td></tr>
+                                    <tr><td><strong>JAMB Score</strong></td><td>${a.jamb_score}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card mb-2">
+                            <div class="card-header">O'Level Results</div>
+                            <div class="card-body">
+                                <table>
+                                    <thead><tr><th>Subject</th><th>Grade</th><th>Exam</th><th>Year</th></tr></thead>
+                                    <tbody>
+                                        ${(a.o_level_results || []).map(r => {
+                                            const isCredit = creditGrades.includes(r.grade);
+                                            const reqSubjects = (a.required_subjects || []).map(s => s.toLowerCase());
+                                            const isRequired = reqSubjects.includes(r.subject.toLowerCase());
+                                            return `<tr style="${isRequired ? 'font-weight:600' : ''}">
+                                                <td>${r.subject} ${isRequired ? '(Required)' : ''}</td>
+                                                <td style="color:${isCredit ? 'var(--success)' : 'var(--danger)'}">${r.grade}</td>
+                                                <td>${r.exam_type || '—'}</td>
+                                                <td>${r.year || '—'}</td>
+                                            </tr>`;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card mb-2">
+                            <div class="card-header">Status History</div>
+                            <div class="card-body">
+                                <div class="timeline">
+                                    ${(a.status_history || []).map(h => `
+                                        <div class="timeline-item">
+                                            <div class="timeline-title">${h.new_status.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
+                                            <div class="timeline-date">${formatDate(h.changed_at)}</div>
+                                            ${h.first_name ? `<div class="timeline-note">By: ${h.first_name} ${h.last_name} (${h.role || ''})</div>` : ''}
+                                            ${h.notes ? `<div class="timeline-note">${h.notes}</div>` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="card mb-2">
+                            <div class="card-header">Documents</div>
+                            <div class="card-body">
+                                ${a.documents?.length ? a.documents.map(d => `
+                                    <div style="border:1px solid var(--gray-200);border-radius:var(--border-radius);padding:1rem;margin-bottom:0.75rem">
+                                        <div class="d-flex justify-between items-center">
+                                            <strong>${docLabels[d.doc_type] || d.doc_type}</strong>
+                                            ${statusBadge(d.status)}
+                                        </div>
+                                        <p class="text-sm text-muted mt-1">${d.file_name} (${(d.file_size/1024).toFixed(1)} KB)</p>
+                                        ${d.rejection_reason ? `<p class="text-sm" style="color:var(--danger)">Reason: ${d.rejection_reason}</p>` : ''}
+                                        <div class="d-flex gap-1 mt-1">
+                                            <a href="${API_BASE}/documents/${d.id}/download" target="_blank" class="btn btn-sm btn-outline">View</a>
+                                            ${d.status !== 'verified' ? `<button class="btn btn-sm btn-success" onclick="verifyDoc(${d.id})">Verify</button>` : ''}
+                                            ${d.status !== 'rejected' ? `<button class="btn btn-sm btn-danger" onclick="selectedDocId=${d.id};openModal('doc-modal')">Reject</button>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('') : '<p class="text-muted">No documents uploaded.</p>'}
+                            </div>
+                        </div>
+
+                        ${a.eligibility_score ? `
+                        <div class="card mb-2">
+                            <div class="card-header">Eligibility Check</div>
+                            <div class="card-body">
+                                <p><strong>Result:</strong> ${a.eligibility_score.passed ? '<span style="color:var(--success)">PASSED</span>' : '<span style="color:var(--danger)">FAILED</span>'}</p>
+                                <p><strong>Credits:</strong> ${a.eligibility_score.credits_obtained} / ${a.eligibility_score.credits_required}</p>
+                                ${a.eligibility_score.missing_subjects?.length ? `<p><strong>Missing:</strong> ${a.eligibility_score.missing_subjects.join(', ')}</p>` : ''}
+                                <p class="text-sm text-muted mt-1">${a.eligibility_score.notes}</p>
+                            </div>
+                        </div>` : ''}
+
+                        ${a.admin_notes ? `
+                        <div class="card">
+                            <div class="card-header">Admin Notes</div>
+                            <div class="card-body"><p>${a.admin_notes}</p></div>
+                        </div>` : ''}
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('app-content').innerHTML = html;
+        }
+
+        function openModal(id) { document.getElementById(id).classList.add('active'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        // Close on backdrop click
+        document.querySelectorAll('.modal-overlay').forEach(m => {
+            m.addEventListener('click', (e) => { if (e.target === m) closeModal(m.id); });
+        });
+
+        async function saveStatus() {
+            const status = document.getElementById('modal-status').value;
+            const notes = document.getElementById('modal-notes').value.trim();
+            if (!status) { alert('Please select a status'); return; }
+
+            const res = await Api.put(`/admin/applications/${appId}/status`, { status, notes });
+            if (res?.success) {
+                closeModal('status-modal');
+                showAlert('alert-box', res.message, 'success');
+                loadApplication();
+            } else {
+                alert(res?.message || 'Failed to update status');
+            }
+        }
+
+        async function verifyDoc(docId) {
+            const res = await Api.put(`/admin/documents/${docId}/verify`, { action: 'verify' });
+            if (res?.success) {
+                showAlert('alert-box', 'Document verified', 'success');
+                loadApplication();
+            } else {
+                alert(res?.message || 'Failed');
+            }
+        }
+
+        async function rejectDoc() {
+            const reason = document.getElementById('doc-reason').value.trim();
+            if (!reason) { alert('Please enter a reason'); return; }
+
+            const res = await Api.put(`/admin/documents/${selectedDocId}/verify`, { action: 'reject', reason });
+            if (res?.success) {
+                closeModal('doc-modal');
+                showAlert('alert-box', 'Document rejected', 'warning');
+                loadApplication();
+            } else {
+                alert(res?.message || 'Failed');
+            }
+        }
+
+        loadApplication();
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault(); Auth.clear(); window.location.href = '/admin/login.html';
+        });
+    </script>
+</body>
+</html>

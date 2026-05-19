@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="auth-page">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h2>Create Account</h2>
+                <p>AFIT Virtual Admission System</p>
+            </div>
+            <div class="auth-body">
+                <div id="alert-box"></div>
+                <form id="register-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>First Name</label>
+                            <input type="text" name="first_name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Last Name</label>
+                            <input type="text" name="last_name" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" name="email" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="tel" name="phone" class="form-control" placeholder="e.g. 08012345678" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Gender</label>
+                            <select name="gender" class="form-control">
+                                <option value="">Select</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>State of Origin</label>
+                            <input type="text" name="state_of_origin" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Date of Birth</label>
+                        <input type="date" name="date_of_birth" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" name="password" class="form-control" required minlength="8">
+                        <small class="text-muted text-sm">Min 8 chars, include uppercase, lowercase and digit</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" name="confirm_password" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-lg" id="submit-btn">Create Account</button>
+                </form>
+                <p class="text-center mt-2 text-sm">Already have an account? <a href="/login.html">Log in</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (Auth.isLoggedIn()) window.location.href = '/dashboard.html';
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearAlert('alert-box');
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+
+            const form = e.target;
+            const data = {
+                first_name: form.first_name.value.trim(),
+                last_name: form.last_name.value.trim(),
+                email: form.email.value.trim(),
+                phone: form.phone.value.trim(),
+                password: form.password.value,
+                gender: form.gender.value || null,
+                state_of_origin: form.state_of_origin.value.trim() || null,
+                date_of_birth: form.date_of_birth.value || null,
+            };
+
+            if (data.password !== form.confirm_password.value) {
+                showAlert('alert-box', 'Passwords do not match.');
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+                return;
+            }
+
+            const res = await Api.post('/auth/register', data);
+            if (res?.success) {
+                sessionStorage.setItem('reg_email', data.email);
+                showAlert('alert-box', 'Account created successfully! You can now log in.', 'success');
+                setTimeout(() => window.location.href = '/login.html', 1500);
+            } else {
+                const msg = res?.errors
+                    ? Object.values(res.errors).join('<br>')
+                    : (res?.message || 'Registration failed');
+                showAlert('alert-box', msg);
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+            }
+        });
+    </script>
+</body>
+</html>

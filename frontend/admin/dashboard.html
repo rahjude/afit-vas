@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Dashboard - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar" style="background:var(--secondary)">
+        <a href="/admin/dashboard.html" class="navbar-brand">
+            <div><h1>AFIT VAS Admin</h1><small>Air Force Institute of Technology</small></div>
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="/admin/dashboard.html" class="active">Dashboard</a></li>
+            <li><a href="/admin/applications.html">Applications</a></li>
+            <li><a href="/admin/reports.html">Reports</a></li>
+            <li><span class="nav-user" id="nav-user-name"></span></li>
+            <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h2 class="mb-2">Dashboard Overview</h2>
+
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card"><div class="spinner"></div></div>
+        </div>
+
+        <div class="two-col">
+            <div class="card">
+                <div class="card-header">Programme Breakdown</div>
+                <div class="card-body" id="programme-chart">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">Recent Applications</div>
+                <div class="card-body" id="recent-apps">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!Auth.requireLogin('admin')) throw '';
+        const user = Auth.getUser();
+        setNavUser(`${user.first_name} ${user.last_name}`);
+
+        (async () => {
+            const res = await Api.get('/admin/stats');
+            if (!res?.data) return;
+
+            const { overview, programmes } = res.data;
+
+            // Stats cards
+            document.getElementById('stats-grid').innerHTML = `
+                <div class="stat-card"><div class="stat-value">${overview.total || 0}</div><div class="stat-label">Total Applications</div></div>
+                <div class="stat-card warning"><div class="stat-value">${(parseInt(overview.eligible||0) + parseInt(overview.not_eligible||0))}</div><div class="stat-label">Pending Review</div></div>
+                <div class="stat-card success"><div class="stat-value">${overview.admitted || 0}</div><div class="stat-label">Admitted</div></div>
+                <div class="stat-card danger"><div class="stat-value">${overview.rejected || 0}</div><div class="stat-label">Rejected</div></div>
+                <div class="stat-card info"><div class="stat-value">${overview.eligible || 0}</div><div class="stat-label">Eligible</div></div>
+                <div class="stat-card"><div class="stat-value">${overview.draft || 0}</div><div class="stat-label">Drafts</div></div>
+            `;
+
+            // Programme chart
+            const maxCount = Math.max(...programmes.map(p => parseInt(p.count) || 1), 1);
+            document.getElementById('programme-chart').innerHTML = `
+                <div class="bar-chart">
+                    ${programmes.map(p => `
+                        <div class="bar-row">
+                            <span class="bar-label">${p.code}</span>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width:${Math.max(((p.count/maxCount)*100),5)}%">${p.count}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            // Recent applications
+            const appsRes = await Api.get('/admin/applications?per_page=8');
+            if (appsRes?.data?.data?.length) {
+                document.getElementById('recent-apps').innerHTML = `
+                    <div class="table-container">
+                    <table>
+                        <thead><tr><th>Reference</th><th>Name</th><th>Programme</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                            ${appsRes.data.data.map(a => `<tr>
+                                <td>${a.reference_number}</td>
+                                <td>${a.first_name} ${a.last_name}</td>
+                                <td>${a.programme_code}</td>
+                                <td>${statusBadge(a.status)}</td>
+                                <td><a href="/admin/review.html?id=${a.id}" class="btn btn-sm btn-outline">Review</a></td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+            } else {
+                document.getElementById('recent-apps').innerHTML = '<p class="text-center text-muted">No applications yet.</p>';
+            }
+        })();
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault(); Auth.clear(); window.location.href = '/admin/login.html';
+        });
+    </script>
+</body>
+</html>
