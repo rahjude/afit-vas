@@ -1,6 +1,8 @@
 // AFIT VAS API Wrapper & Auth State Management
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/api'
+    : 'https://user:7e7ca8c6b38a2ed9e7ba836430d4af67@f3ef192e51d9-tunnel-ljgpjyuz.devinapps.com/api';
 
 const Auth = {
     save(token, user) {
