@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Status - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/dashboard.html" class="navbar-brand">
+            <div><h1>AFIT VAS</h1><small>Air Force Institute of Technology</small></div>
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="/dashboard.html">Dashboard</a></li>
+            <li><a href="/application.html">Apply</a></li>
+            <li><a href="/documents.html">Documents</a></li>
+            <li><a href="/status.html" class="active">Status</a></li>
+            <li><span class="nav-user" id="nav-user-name"></span></li>
+            <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="form-group" style="max-width:400px">
+            <label>Select Application</label>
+            <select id="app-select" class="form-control">
+                <option value="">-- Select --</option>
+            </select>
+        </div>
+
+        <div id="status-content">
+            <div class="text-center text-muted" style="padding:3rem">
+                <p>Select an application above to view its status.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!Auth.requireLogin()) throw '';
+        const user = Auth.getUser();
+        setNavUser(`${user.first_name} ${user.last_name}`);
+
+        let applications = [];
+
+        (async () => {
+            const res = await Api.get('/applications');
+            if (res?.data) {
+                applications = res.data;
+                const sel = document.getElementById('app-select');
+                applications.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a.id;
+                    opt.textContent = `${a.reference_number} — ${a.programme_name}`;
+                    sel.appendChild(opt);
+                });
+
+                // Auto-select from URL param
+                const urlId = new URLSearchParams(window.location.search).get('id');
+                if (urlId) {
+                    sel.value = urlId;
+                    loadStatus(parseInt(urlId));
+                }
+            }
+        })();
+
+        document.getElementById('app-select').addEventListener('change', function() {
+            if (this.value) loadStatus(parseInt(this.value));
+        });
+
+        async function loadStatus(appId) {
+            const res = await Api.get(`/applications/${appId}`);
+            if (!res?.data) {
+                document.getElementById('status-content').innerHTML = '<div class="alert alert-danger">Application not found.</div>';
+                return;
+            }
+
+            const app = res.data;
+            const statusIcons = {
+                draft: '&#128221;', submitted: '&#128228;', eligible: '&#9989;',
+                not_eligible: '&#10060;', under_review: '&#128269;', admitted: '&#127891;', rejected: '&#10060;'
+            };
+            const statusText = {
+                draft: 'Draft — Not yet submitted',
+                submitted: 'Submitted — Awaiting screening',
+                eligible: 'Eligible — Awaiting admin review',
+                not_eligible: 'Not Eligible — Requirements not met',
+                under_review: 'Under Review — Being reviewed by admissions',
+                admitted: 'Admitted — Congratulations!',
+                rejected: 'Rejected'
+            };
+
+            let html = `
+                <div class="status-banner ${app.status}">
+                    <span style="font-size:2rem">${statusIcons[app.status] || ''}</span>
+                    <div>
+                        <h2>${statusText[app.status] || app.status}</h2>
+                        <p>Reference: ${app.reference_number} | Programme: ${app.programme_name} (${app.programme_code})</p>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <div>
+                        <div class="card mb-2">
+                            <div class="card-header">Status Timeline</div>
+                            <div class="card-body">
+                                <div class="timeline">
+                                    ${(app.status_history || []).map(h => `
+                                        <div class="timeline-item">
+                                            <div class="timeline-title">${h.new_status.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
+                                            <div class="timeline-date">${formatDate(h.changed_at)}</div>
+                                            ${h.first_name ? `<div class="timeline-note">By: ${h.first_name} ${h.last_name}</div>` : ''}
+                                            ${h.notes ? `<div class="timeline-note">${h.notes}</div>` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>`;
+
+            // Eligibility check
+            if (app.eligibility_score) {
+                const e = app.eligibility_score;
+                html += `
+                    <div class="card mb-2">
+                        <div class="card-header">Eligibility Check</div>
+                        <div class="card-body">
+                            <p><strong>Result:</strong> ${e.passed ? '<span style="color:var(--success)">PASSED</span>' : '<span style="color:var(--danger)">FAILED</span>'}</p>
+                            <p><strong>Credits:</strong> ${e.credits_obtained} of ${e.credits_required} required</p>
+                            ${e.missing_subjects?.length ? `<p><strong>Missing/Insufficient:</strong> ${e.missing_subjects.join(', ')}</p>` : ''}
+                            <p class="text-sm text-muted mt-1">${e.notes}</p>
+                        </div>
+                    </div>`;
+            }
+
+            // Admin notes
+            if (app.admin_notes) {
+                html += `
+                    <div class="card mb-2">
+                        <div class="card-header">Admin Notes</div>
+                        <div class="card-body"><p>${app.admin_notes}</p></div>
+                    </div>`;
+            }
+
+            // Documents
+            if (app.documents?.length) {
+                const docLabels = {
+                    waec_result:'WAEC', neco_result:'NECO', jamb_slip:'JAMB Slip',
+                    birth_certificate:'Birth Cert', passport_photo:'Passport', lga_certificate:'LGA Cert',
+                    medical_certificate:'Medical Cert'
+                };
+                html += `
+                    <div class="card">
+                        <div class="card-header">Documents</div>
+                        <div class="card-body">
+                            ${app.documents.map(d => `
+                                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--gray-100)">
+                                    <div>
+                                        <strong>${docLabels[d.doc_type] || d.doc_type}</strong>
+                                        <br><small class="text-muted">${d.file_name}</small>
+                                    </div>
+                                    <div>${statusBadge(d.status)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+            }
+
+            html += '</div></div>';
+            document.getElementById('status-content').innerHTML = html;
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault(); Auth.clear(); window.location.href = '/login.html';
+        });
+    </script>
+</body>
+</html>

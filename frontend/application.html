@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Apply - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/dashboard.html" class="navbar-brand">
+            <div><h1>AFIT VAS</h1><small>Air Force Institute of Technology</small></div>
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="/dashboard.html">Dashboard</a></li>
+            <li><a href="/application.html" class="active">Apply</a></li>
+            <li><a href="/documents.html">Documents</a></li>
+            <li><a href="/status.html">Status</a></li>
+            <li><span class="nav-user" id="nav-user-name"></span></li>
+            <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="container container-sm">
+        <div id="alert-box"></div>
+
+        <div class="stepper" id="stepper">
+            <div class="step active" data-step="1">
+                <span class="step-number">1</span>
+                <span class="step-label">Programme</span>
+            </div>
+            <div class="step" data-step="2">
+                <span class="step-number">2</span>
+                <span class="step-label">Personal Info</span>
+            </div>
+            <div class="step" data-step="3">
+                <span class="step-number">3</span>
+                <span class="step-label">O'Level Results</span>
+            </div>
+            <div class="step" data-step="4">
+                <span class="step-number">4</span>
+                <span class="step-label">Review & Submit</span>
+            </div>
+        </div>
+
+        <!-- Step 1: Programme Selection -->
+        <div class="card step-card" id="step-1">
+            <div class="card-header">Step 1: Programme Selection</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Select Programme *</label>
+                    <select id="programme-select" class="form-control" required>
+                        <option value="">-- Select a programme --</option>
+                    </select>
+                </div>
+                <div id="programme-info" class="alert alert-info hidden"></div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>JAMB Registration Number</label>
+                        <input type="text" id="jamb-reg" class="form-control" placeholder="e.g. 12345678AB">
+                    </div>
+                    <div class="form-group">
+                        <label>JAMB Score *</label>
+                        <input type="number" id="jamb-score" class="form-control" min="0" max="400" required>
+                    </div>
+                </div>
+                <div class="text-right mt-2">
+                    <button class="btn btn-primary" onclick="goStep(2)">Next &rarr;</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Personal Information -->
+        <div class="card step-card hidden" id="step-2">
+            <div class="card-header">Step 2: Personal Information</div>
+            <div class="card-body">
+                <div id="profile-preview"></div>
+                <div class="form-row mt-2">
+                    <div class="form-group">
+                        <label>Previous Institution</label>
+                        <input type="text" id="prev-institution" class="form-control" placeholder="e.g. Government Secondary School">
+                    </div>
+                    <div class="form-group">
+                        <label>Previous Qualification</label>
+                        <select id="prev-qualification" class="form-control">
+                            <option value="">Select</option>
+                            <option value="WAEC">WAEC</option>
+                            <option value="NECO">NECO</option>
+                            <option value="NABTEB">NABTEB</option>
+                            <option value="GCE">GCE</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex justify-between mt-2">
+                    <button class="btn btn-outline" onclick="goStep(1)">&larr; Back</button>
+                    <button class="btn btn-primary" onclick="goStep(3)">Next &rarr;</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: O'Level Results -->
+        <div class="card step-card hidden" id="step-3">
+            <div class="card-header">Step 3: O'Level Results</div>
+            <div class="card-body">
+                <p class="text-sm text-muted mb-2">Enter your O'Level results. Add at least 5 subjects including required subjects for your chosen programme.</p>
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Grade</th>
+                            <th>Exam Type</th>
+                            <th>Year</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-tbody"></tbody>
+                </table>
+                <button class="btn btn-outline btn-sm mt-1" onclick="addResultRow()">+ Add Subject</button>
+                <div class="d-flex justify-between mt-2">
+                    <button class="btn btn-outline" onclick="goStep(2)">&larr; Back</button>
+                    <button class="btn btn-primary" onclick="goStep(4)">Next &rarr;</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Review & Submit -->
+        <div class="card step-card hidden" id="step-4">
+            <div class="card-header">Step 4: Review & Submit</div>
+            <div class="card-body">
+                <div class="alert alert-warning">Please review all information carefully. Once submitted, your application will be screened automatically and cannot be modified.</div>
+                <div id="review-content"></div>
+                <div class="d-flex justify-between mt-2">
+                    <button class="btn btn-outline" onclick="goStep(3)">&larr; Back</button>
+                    <button class="btn btn-success btn-lg" id="submit-btn" onclick="submitApplication()">Submit Application</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!Auth.requireLogin()) throw '';
+        const user = Auth.getUser();
+        setNavUser(`${user.first_name} ${user.last_name}`);
+
+        let programmes = [];
+        let currentStep = 1;
+        const commonSubjects = ['Mathematics','English Language','Physics','Chemistry','Biology',
+            'Further Mathematics','Economics','Government','Literature in English',
+            'Agricultural Science','Computer Studies','Civic Education','Geography',
+            'Commerce','Accounting','Technical Drawing','History'];
+        const grades = ['A1','B2','B3','C4','C5','C6','D7','E8','F9'];
+
+        // Load programmes
+        (async () => {
+            const res = await Api.get('/programmes');
+            if (res?.data) {
+                programmes = res.data;
+                const sel = document.getElementById('programme-select');
+                programmes.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = `${p.name} (${p.code}) — ${p.degree_type}`;
+                    sel.appendChild(opt);
+                });
+            }
+        })();
+
+        document.getElementById('programme-select').addEventListener('change', function() {
+            const prog = programmes.find(p => p.id == this.value);
+            const info = document.getElementById('programme-info');
+            if (prog) {
+                info.classList.remove('hidden');
+                info.innerHTML = `<strong>${prog.name}</strong> — ${prog.degree_type}, ${prog.department}<br>
+                    <small>Required subjects: ${prog.required_subjects.join(', ')} (min ${prog.min_credits} credits)</small>`;
+            } else {
+                info.classList.add('hidden');
+            }
+        });
+
+        // Profile preview
+        (async () => {
+            const res = await Api.get('/profile');
+            if (res?.data) {
+                const d = res.data;
+                document.getElementById('profile-preview').innerHTML = `
+                    <div class="card" style="background:var(--gray-50)">
+                        <div class="card-body">
+                            <h4 style="margin-bottom:0.75rem">Your Profile</h4>
+                            <div class="form-row">
+                                <div><strong>Name:</strong> ${d.first_name} ${d.last_name}</div>
+                                <div><strong>Email:</strong> ${d.email}</div>
+                            </div>
+                            <div class="form-row mt-1">
+                                <div><strong>Phone:</strong> ${d.phone}</div>
+                                <div><strong>Gender:</strong> ${d.gender || '—'}</div>
+                            </div>
+                            <div class="form-row mt-1">
+                                <div><strong>State:</strong> ${d.state_of_origin || '—'}</div>
+                                <div><strong>DOB:</strong> ${d.date_of_birth || '—'}</div>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+        })();
+
+        // O'Level result rows
+        function addResultRow(subject = '', grade = '', examType = '', year = '') {
+            const tbody = document.getElementById('results-tbody');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <input type="text" class="form-control res-subject" list="subjects-list" value="${subject}" placeholder="Select subject">
+                </td>
+                <td>
+                    <select class="form-control res-grade">
+                        <option value="">Grade</option>
+                        ${grades.map(g => `<option value="${g}" ${g===grade?'selected':''}>${g}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <select class="form-control res-exam">
+                        <option value="">Type</option>
+                        <option value="WAEC" ${examType==='WAEC'?'selected':''}>WAEC</option>
+                        <option value="NECO" ${examType==='NECO'?'selected':''}>NECO</option>
+                        <option value="NABTEB" ${examType==='NABTEB'?'selected':''}>NABTEB</option>
+                        <option value="GCE" ${examType==='GCE'?'selected':''}>GCE</option>
+                    </select>
+                </td>
+                <td><input type="number" class="form-control res-year" value="${year}" min="2000" max="2026" placeholder="Year"></td>
+                <td><button class="btn btn-sm btn-danger" onclick="this.closest('tr').remove()">X</button></td>
+            `;
+            tbody.appendChild(row);
+        }
+
+        // Add datalist
+        const dl = document.createElement('datalist');
+        dl.id = 'subjects-list';
+        commonSubjects.forEach(s => { const o = document.createElement('option'); o.value = s; dl.appendChild(o); });
+        document.body.appendChild(dl);
+
+        // Pre-populate 5 rows
+        for (let i = 0; i < 5; i++) addResultRow();
+
+        function goStep(n) {
+            // Validation
+            if (n > currentStep) {
+                if (currentStep === 1) {
+                    if (!document.getElementById('programme-select').value) {
+                        showAlert('alert-box', 'Please select a programme.');
+                        return;
+                    }
+                    if (!document.getElementById('jamb-score').value) {
+                        showAlert('alert-box', 'Please enter your JAMB score.');
+                        return;
+                    }
+                }
+            }
+
+            clearAlert('alert-box');
+            document.querySelectorAll('.step-card').forEach(c => c.classList.add('hidden'));
+            document.getElementById(`step-${n}`).classList.remove('hidden');
+
+            document.querySelectorAll('.step').forEach(s => {
+                const sn = parseInt(s.dataset.step);
+                s.classList.remove('active', 'completed');
+                if (sn < n) s.classList.add('completed');
+                if (sn === n) s.classList.add('active');
+            });
+
+            currentStep = n;
+            if (n === 4) buildReview();
+            window.scrollTo(0, 0);
+        }
+
+        function getOLevelResults() {
+            const rows = document.querySelectorAll('#results-tbody tr');
+            const results = [];
+            rows.forEach(row => {
+                const subject = row.querySelector('.res-subject').value.trim();
+                const grade = row.querySelector('.res-grade').value;
+                const exam_type = row.querySelector('.res-exam').value;
+                const year = row.querySelector('.res-year').value;
+                if (subject && grade) {
+                    results.push({ subject, grade, exam_type, year: parseInt(year) || null });
+                }
+            });
+            return results;
+        }
+
+        function buildReview() {
+            const prog = programmes.find(p => p.id == document.getElementById('programme-select').value);
+            const results = getOLevelResults();
+            const html = `
+                <h4>Programme</h4>
+                <p>${prog?.name} (${prog?.code}) — ${prog?.degree_type}</p>
+                <p><strong>JAMB Reg:</strong> ${document.getElementById('jamb-reg').value || '—'}</p>
+                <p><strong>JAMB Score:</strong> ${document.getElementById('jamb-score').value}</p>
+                <hr style="margin:1rem 0;border-color:var(--gray-200)">
+                <h4>Additional Info</h4>
+                <p><strong>Previous Institution:</strong> ${document.getElementById('prev-institution').value || '—'}</p>
+                <p><strong>Previous Qualification:</strong> ${document.getElementById('prev-qualification').value || '—'}</p>
+                <hr style="margin:1rem 0;border-color:var(--gray-200)">
+                <h4>O'Level Results (${results.length} subjects)</h4>
+                <table>
+                    <thead><tr><th>Subject</th><th>Grade</th><th>Exam</th><th>Year</th></tr></thead>
+                    <tbody>
+                        ${results.map(r => `<tr><td>${r.subject}</td><td>${r.grade}</td><td>${r.exam_type||'—'}</td><td>${r.year||'—'}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('review-content').innerHTML = html;
+        }
+
+        async function submitApplication() {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+            clearAlert('alert-box');
+
+            const oLevelResults = getOLevelResults();
+            if (oLevelResults.length < 5) {
+                showAlert('alert-box', 'Please enter at least 5 O\'level subjects.');
+                btn.disabled = false;
+                btn.textContent = 'Submit Application';
+                return;
+            }
+
+            const data = {
+                programme_id: parseInt(document.getElementById('programme-select').value),
+                jamb_reg_number: document.getElementById('jamb-reg').value.trim(),
+                jamb_score: parseInt(document.getElementById('jamb-score').value),
+                previous_institution: document.getElementById('prev-institution').value.trim(),
+                previous_qualification: document.getElementById('prev-qualification').value,
+                o_level_results: oLevelResults,
+            };
+
+            // Create application
+            const createRes = await Api.post('/applications', data);
+            if (!createRes?.success) {
+                showAlert('alert-box', createRes?.message || 'Failed to create application');
+                btn.disabled = false;
+                btn.textContent = 'Submit Application';
+                return;
+            }
+
+            // Submit (triggers eligibility screening)
+            const appId = createRes.data.id;
+            const submitRes = await Api.post(`/applications/${appId}/submit`);
+            if (submitRes?.success) {
+                showAlert('alert-box',
+                    `Application submitted! Reference: ${createRes.data.reference_number}. Eligibility: ${submitRes.data.status.replace(/_/g,' ')}`,
+                    submitRes.data.eligibility.passed ? 'success' : 'warning'
+                );
+                setTimeout(() => window.location.href = `/status.html?id=${appId}`, 2000);
+            } else {
+                showAlert('alert-box', submitRes?.message || 'Submission failed');
+                btn.disabled = false;
+                btn.textContent = 'Submit Application';
+            }
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault(); Auth.clear(); window.location.href = '/login.html';
+        });
+    </script>
+</body>
+</html>

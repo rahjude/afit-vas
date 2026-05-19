@@ -1,0 +1,15 @@
+{
+    "name": "afit/vas",
+    "description": "AFIT Cloud-Based Virtual Admission System",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "firebase/php-jwt": "^6.0",
+        "vlucas/phpdotenv": "^5.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+}

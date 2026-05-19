@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Documents - AFIT VAS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/dashboard.html" class="navbar-brand">
+            <div><h1>AFIT VAS</h1><small>Air Force Institute of Technology</small></div>
+        </a>
+        <ul class="navbar-nav">
+            <li><a href="/dashboard.html">Dashboard</a></li>
+            <li><a href="/application.html">Apply</a></li>
+            <li><a href="/documents.html" class="active">Documents</a></li>
+            <li><a href="/status.html">Status</a></li>
+            <li><span class="nav-user" id="nav-user-name"></span></li>
+            <li><a href="#" id="logout-btn">Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="container container-sm">
+        <h2 class="mb-2">Document Upload</h2>
+        <div id="alert-box"></div>
+
+        <div class="form-group">
+            <label>Select Application</label>
+            <select id="app-select" class="form-control">
+                <option value="">-- Select application --</option>
+            </select>
+        </div>
+
+        <div id="upload-section" class="hidden">
+            <div class="card mb-2">
+                <div class="card-header">Upload Document</div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Document Type *</label>
+                            <select id="doc-type" class="form-control">
+                                <option value="">Select type</option>
+                                <option value="waec_result">WAEC Result</option>
+                                <option value="neco_result">NECO Result</option>
+                                <option value="jamb_slip">JAMB Slip</option>
+                                <option value="birth_certificate">Birth Certificate</option>
+                                <option value="passport_photo">Passport Photo</option>
+                                <option value="lga_certificate">LGA Certificate</option>
+                                <option value="medical_certificate">Medical Certificate</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>File (PDF, JPEG, PNG — max 5MB) *</label>
+                            <input type="file" id="doc-file" class="form-control" accept=".pdf,.jpg,.jpeg,.png">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="upload-btn" onclick="uploadDocument()">Upload</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Uploaded Documents</div>
+                <div class="card-body" id="docs-list">
+                    <p class="text-center text-muted">No documents uploaded yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!Auth.requireLogin()) throw '';
+        const user = Auth.getUser();
+        setNavUser(`${user.first_name} ${user.last_name}`);
+
+        let selectedAppId = null;
+
+        (async () => {
+            const res = await Api.get('/applications');
+            if (res?.data?.length) {
+                const sel = document.getElementById('app-select');
+                res.data.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = a.id;
+                    opt.textContent = `${a.reference_number} — ${a.programme_name} (${a.status})`;
+                    sel.appendChild(opt);
+                });
+            }
+        })();
+
+        document.getElementById('app-select').addEventListener('change', function() {
+            selectedAppId = this.value ? parseInt(this.value) : null;
+            if (selectedAppId) {
+                document.getElementById('upload-section').classList.remove('hidden');
+                loadDocuments();
+            } else {
+                document.getElementById('upload-section').classList.add('hidden');
+            }
+        });
+
+        async function loadDocuments() {
+            const res = await Api.get(`/documents?application_id=${selectedAppId}`);
+            const list = document.getElementById('docs-list');
+            if (res?.data?.length) {
+                const docTypeLabels = {
+                    waec_result: 'WAEC Result', neco_result: 'NECO Result',
+                    jamb_slip: 'JAMB Slip', birth_certificate: 'Birth Certificate',
+                    passport_photo: 'Passport Photo', lga_certificate: 'LGA Certificate',
+                    medical_certificate: 'Medical Certificate'
+                };
+                list.innerHTML = `<table>
+                    <thead><tr><th>Type</th><th>File</th><th>Status</th><th>Uploaded</th></tr></thead>
+                    <tbody>
+                        ${res.data.map(d => `<tr>
+                            <td>${docTypeLabels[d.doc_type] || d.doc_type}</td>
+                            <td>${d.file_name}<br><small class="text-muted">${(d.file_size/1024).toFixed(1)} KB</small></td>
+                            <td>${statusBadge(d.status)}${d.rejection_reason ? '<br><small class="text-muted">'+d.rejection_reason+'</small>' : ''}</td>
+                            <td>${formatDate(d.uploaded_at)}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`;
+            } else {
+                list.innerHTML = '<p class="text-center text-muted" style="padding:1rem">No documents uploaded yet.</p>';
+            }
+        }
+
+        async function uploadDocument() {
+            clearAlert('alert-box');
+            const docType = document.getElementById('doc-type').value;
+            const fileInput = document.getElementById('doc-file');
+
+            if (!docType) { showAlert('alert-box', 'Select a document type'); return; }
+            if (!fileInput.files.length) { showAlert('alert-box', 'Select a file'); return; }
+
+            const btn = document.getElementById('upload-btn');
+            btn.disabled = true;
+            btn.textContent = 'Uploading...';
+
+            const formData = new FormData();
+            formData.append('application_id', selectedAppId);
+            formData.append('doc_type', docType);
+            formData.append('file', fileInput.files[0]);
+
+            const res = await Api.upload('/documents/upload', formData);
+            if (res?.success) {
+                showAlert('alert-box', 'Document uploaded successfully!', 'success');
+                fileInput.value = '';
+                document.getElementById('doc-type').value = '';
+                loadDocuments();
+            } else {
+                showAlert('alert-box', res?.message || 'Upload failed');
+            }
+            btn.disabled = false;
+            btn.textContent = 'Upload';
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', (e) => {
+            e.preventDefault(); Auth.clear(); window.location.href = '/login.html';
+        });
+    </script>
+</body>
+</html>

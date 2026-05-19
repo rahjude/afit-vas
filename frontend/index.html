@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AFIT Virtual Admission System</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="hero">
+        <h1>AFIT Virtual Admission System</h1>
+        <p>Air Force Institute of Technology, Kaduna — 2025/2026 Admission Session</p>
+        <p>Apply online, track your status in real time, and receive instant updates on your admission journey.</p>
+        <div class="hero-actions">
+            <a href="/register.html" class="btn btn-white btn-lg">Apply Now</a>
+            <a href="/login.html" class="btn btn-outline-white btn-lg">Applicant Login</a>
+        </div>
+        <div style="margin-top:1rem">
+            <a href="/admin/login.html" style="color:rgba(255,255,255,0.7);font-size:0.85rem;text-decoration:underline">Admin Portal</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="feature-grid">
+            <div class="card feature-card">
+                <div class="icon">&#9729;</div>
+                <h3>Cloud Availability</h3>
+                <p>Access the portal 24/7 from anywhere. Our cloud infrastructure ensures consistent uptime.</p>
+            </div>
+            <div class="card feature-card">
+                <div class="icon">&#9889;</div>
+                <h3>Real-Time Updates</h3>
+                <p>Receive instant notifications as your application progresses through each stage.</p>
+            </div>
+            <div class="card feature-card">
+                <div class="icon">&#128274;</div>
+                <h3>Secure & Private</h3>
+                <p>Your data is encrypted and protected with industry-standard security measures.</p>
+            </div>
+            <div class="card feature-card">
+                <div class="icon">&#128241;</div>
+                <h3>Mobile Friendly</h3>
+                <p>Apply from any device — desktop, tablet, or smartphone with a responsive design.</p>
+            </div>
+            <div class="card feature-card">
+                <div class="icon">&#128196;</div>
+                <h3>Document Upload</h3>
+                <p>Upload all required documents securely. Supported formats: PDF, JPEG, PNG.</p>
+            </div>
+            <div class="card feature-card">
+                <div class="icon">&#9989;</div>
+                <h3>Automated Screening</h3>
+                <p>Instant eligibility check based on your O'level results and JAMB score.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer style="text-align:center;padding:2rem;color:var(--gray-500);font-size:0.85rem;border-top:1px solid var(--gray-200);margin-top:2rem;">
+        &copy; 2026 Air Force Institute of Technology, Kaduna. All rights reserved.
+    </footer>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (Auth.isLoggedIn()) {
+            const user = Auth.getUser();
+            if (['admin','super_admin'].includes(user?.role)) {
+                window.location.href = '/admin/dashboard.html';
+            } else {
+                window.location.href = '/dashboard.html';
+            }
+        }
+    </script>
+</body>
+</html>
